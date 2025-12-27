@@ -50,6 +50,7 @@ const DEFAULT_OVERRIDES_NAME = 'opencode-sync.overrides.jsonc';
 const DEFAULT_STATE_NAME = 'opencode-sync-state.json';
 
 const CONFIG_DIRS = ['agent', 'command', 'mode', 'tool', 'themes', 'plugin'];
+const SESSION_DIRS = ['storage/session', 'storage/message', 'storage/part', 'storage/session_diff'];
 
 export function resolveHomeDir(
   env: NodeJS.ProcessEnv = process.env,
@@ -212,6 +213,18 @@ export function buildSyncPlan(
         isConfigFile: false,
       }
     );
+
+    if (config.includeSessions) {
+      for (const dirName of SESSION_DIRS) {
+        items.push({
+          localPath: path.join(dataRoot, dirName),
+          repoPath: path.join(repoDataRoot, dirName),
+          type: 'dir',
+          isSecret: true,
+          isConfigFile: false,
+        });
+      }
+    }
   }
 
   const allowlist = config.includeSecrets

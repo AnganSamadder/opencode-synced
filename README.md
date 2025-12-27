@@ -6,6 +6,7 @@ Sync global OpenCode configuration across machines via a GitHub repo, with optio
 
 - Syncs global OpenCode config (`~/.config/opencode`) and related directories
 - Optional secrets sync when the repo is private
+- Optional session sync to share conversation history across machines
 - Startup auto-sync with restart toast
 - Per-machine overrides via `opencode-sync.overrides.jsonc`
 - Custom `/opencode-sync-*` commands and `opencode_sync` tool
@@ -45,6 +46,7 @@ Create `~/.config/opencode/opencode-sync.jsonc`:
     "branch": "main",
   },
   "includeSecrets": false,
+  "includeSessions": false,
   "extraSecretPaths": [],
 }
 ```
@@ -64,6 +66,25 @@ Enable secrets with `/opencode-sync-enable-secrets` or set `"includeSecrets": tr
 - `~/.local/share/opencode/auth.json`
 - `~/.local/share/opencode/mcp-auth.json`
 - Any extra paths in `extraSecretPaths` (allowlist)
+
+### Sessions (private repos only)
+
+Sync your OpenCode sessions (conversation history from `/sessions`) across machines by setting `"includeSessions": true`. This requires `includeSecrets` to also be enabled since sessions may contain sensitive data.
+
+```jsonc
+{
+  "repo": { ... },
+  "includeSecrets": true,
+  "includeSessions": true
+}
+```
+
+Synced session data:
+
+- `~/.local/share/opencode/storage/session/` - Session files
+- `~/.local/share/opencode/storage/message/` - Message history
+- `~/.local/share/opencode/storage/part/` - Message parts
+- `~/.local/share/opencode/storage/session_diff/` - Session diffs
 
 ## Overrides
 
@@ -97,6 +118,7 @@ Create `~/.config/opencode/opencode-sync.jsonc`:
     "branch": "main"
   },
   "includeSecrets": false,
+  "includeSessions": false,
   "extraSecretPaths": []
 }
 ```

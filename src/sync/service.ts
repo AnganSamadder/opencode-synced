@@ -35,6 +35,7 @@ interface InitOptions {
   url?: string;
   branch?: string;
   includeSecrets?: boolean;
+  includeSessions?: boolean;
   create?: boolean;
   private?: boolean;
   extraSecretPaths?: string[];
@@ -92,6 +93,7 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
 
       const repoIdentifier = resolveRepoIdentifier(config);
       const includeSecrets = config.includeSecrets ? 'enabled' : 'disabled';
+      const includeSessions = config.includeSessions ? 'enabled' : 'disabled';
       const lastPull = state.lastPull ?? 'never';
       const lastPush = state.lastPush ?? 'never';
 
@@ -109,6 +111,7 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
         `Repo: ${repoIdentifier}`,
         `Branch: ${branch}`,
         `Secrets: ${includeSecrets}`,
+        `Sessions: ${includeSessions}`,
         `Last pull: ${lastPull}`,
         `Last push: ${lastPush}`,
         `Working tree: ${changesLabel}`,
@@ -304,6 +307,7 @@ function buildConfigFromInit(options: InitOptions) {
   return normalizeSyncConfig({
     repo,
     includeSecrets: options.includeSecrets ?? false,
+    includeSessions: options.includeSessions ?? false,
     extraSecretPaths: options.extraSecretPaths ?? [],
     localRepoPath: options.localRepoPath,
   });

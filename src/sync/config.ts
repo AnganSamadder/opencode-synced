@@ -14,6 +14,7 @@ export interface SyncConfig {
   repo?: SyncRepoConfig;
   localRepoPath?: string;
   includeSecrets?: boolean;
+  includeSessions?: boolean;
   extraSecretPaths?: string[];
 }
 
@@ -35,6 +36,7 @@ export async function pathExists(filePath: string): Promise<boolean> {
 export function normalizeSyncConfig(config: SyncConfig): SyncConfig {
   return {
     includeSecrets: Boolean(config.includeSecrets),
+    includeSessions: Boolean(config.includeSessions),
     extraSecretPaths: Array.isArray(config.extraSecretPaths) ? config.extraSecretPaths : [],
     localRepoPath: config.localRepoPath,
     repo: config.repo,

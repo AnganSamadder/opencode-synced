@@ -84,6 +84,10 @@ export const OpencodeConfigSync: Plugin = async (ctx) => {
       url: tool.schema.string().optional().describe('Repo URL'),
       branch: tool.schema.string().optional().describe('Repo branch'),
       includeSecrets: tool.schema.boolean().optional().describe('Enable secrets sync'),
+      includeSessions: tool.schema
+        .boolean()
+        .optional()
+        .describe('Enable session sync (requires includeSecrets)'),
       create: tool.schema.boolean().optional().describe('Create repo if missing'),
       private: tool.schema.boolean().optional().describe('Create repo as private'),
       extraSecretPaths: tool.schema.array(tool.schema.string()).optional(),
@@ -102,6 +106,7 @@ export const OpencodeConfigSync: Plugin = async (ctx) => {
             url: args.url,
             branch: args.branch,
             includeSecrets: args.includeSecrets,
+            includeSessions: args.includeSessions,
             create: args.create,
             private: args.private,
             extraSecretPaths: args.extraSecretPaths,
