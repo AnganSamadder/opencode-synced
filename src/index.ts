@@ -1,4 +1,6 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Plugin } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
 
@@ -47,13 +49,41 @@ function parseFrontmatter(content: string): { frontmatter: CommandFrontmatter; b
   return { frontmatter, body: body.trim() };
 }
 
+function getModuleDir(): string {
+  // Works in both Bun and Node.js
+  if (typeof import.meta.dir === 'string') {
+    return import.meta.dir;
+  }
+  // Node.js fallback
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
+async function scanMdFiles(dir: string): Promise<string[]> {
+  const files: string[] = [];
+
+  async function walk(currentDir: string): Promise<void> {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  await walk(dir);
+  return files;
+}
+
 async function loadCommands(): Promise<ParsedCommand[]> {
   const commands: ParsedCommand[] = [];
-  const commandDir = path.join(import.meta.dir, 'command');
-  const glob = new Bun.Glob('**/*.md');
+  const commandDir = path.join(getModuleDir(), 'command');
 
-  for await (const file of glob.scan({ cwd: commandDir, absolute: true })) {
-    const content = await Bun.file(file).text();
+  const files = await scanMdFiles(commandDir);
+  for (const file of files) {
+    const content = await fs.readFile(file, 'utf-8');
     const { frontmatter, body } = parseFrontmatter(content);
     const relativePath = path.relative(commandDir, file);
     const name = relativePath.replace(/\.md$/, '').replace(/\//g, '-');
