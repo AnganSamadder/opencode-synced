@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here by Release Please.
 
+## [0.5.1](https://github.com/iHildy/opencode-synced/compare/v0.5.0...v0.5.1) (2025-12-31)
+
+
+### Bug Fixes
+
+* avoid Object.hasOwn and structuredClone ([198857b](https://github.com/iHildy/opencode-synced/commit/198857bf1f4c01689c4e6c92d2559ae0a38e30df))
+* move hasOwn to shared utility and use hasOwnProperty.call ([6919922](https://github.com/iHildy/opencode-synced/commit/6919922f6785d6f1fae2dc09580ca4dfb4746ba9))
+
 ## [0.5.0](https://github.com/iHildy/opencode-synced/compare/v0.4.2...v0.5.0) (2025-12-31)
 
 
