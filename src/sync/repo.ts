@@ -2,14 +2,14 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { PluginInput } from '@opencode-ai/plugin';
 
-import type { SyncConfig } from './config.ts';
-import { pathExists } from './config.ts';
+import type { SyncConfig } from './config.js';
+import { pathExists } from './config.js';
 import {
   RepoDivergedError,
   RepoPrivateRequiredError,
   RepoVisibilityError,
   SyncCommandError,
-} from './errors.ts';
+} from './errors.js';
 
 export interface RepoStatus {
   branch: string;

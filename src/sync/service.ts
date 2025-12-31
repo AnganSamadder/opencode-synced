@@ -1,6 +1,6 @@
 import type { PluginInput } from '@opencode-ai/plugin';
-import { syncLocalToRepo, syncRepoToLocal } from './apply.ts';
-import { generateCommitMessage } from './commit.ts';
+import { syncLocalToRepo, syncRepoToLocal } from './apply.js';
+import { generateCommitMessage } from './commit.js';
 import {
   loadOverrides,
   loadState,
@@ -8,9 +8,9 @@ import {
   normalizeSyncConfig,
   writeState,
   writeSyncConfig,
-} from './config.ts';
-import { SyncCommandError, SyncConfigMissingError } from './errors.ts';
-import { buildSyncPlan, resolveRepoRoot, resolveSyncLocations } from './paths.ts';
+} from './config.js';
+import { SyncCommandError, SyncConfigMissingError } from './errors.js';
+import { buildSyncPlan, resolveRepoRoot, resolveSyncLocations } from './paths.js';
 import {
   commitAll,
   ensureRepoCloned,
@@ -25,14 +25,14 @@ import {
   repoExists,
   resolveRepoBranch,
   resolveRepoIdentifier,
-} from './repo.ts';
+} from './repo.js';
 import {
   createLogger,
   extractTextFromResponse,
   resolveSmallModel,
   showToast,
   unwrapData,
-} from './utils.ts';
+} from './utils.js';
 
 type SyncServiceContext = Pick<PluginInput, 'client' | '$'>;
 type Logger = ReturnType<typeof createLogger>;
@@ -158,7 +158,6 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
       await ensureRepoCloned(ctx.$, config, repoRoot);
       await ensureSecretsPolicy(ctx, config);
 
-      // Perform initial sync if repo was just created
       if (created) {
         const overrides = await loadOverrides(locations);
         const plan = buildSyncPlan(config, locations, repoRoot);
@@ -183,7 +182,6 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
       return lines.join('\n');
     },
     link: async (options: LinkOptions) => {
-      // Search for existing sync repo
       const found = await findSyncRepo(ctx.$, options.repo);
 
       if (!found) {
@@ -203,7 +201,6 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
         return lines.join('\n');
       }
 
-      // Found a repo - configure and pull
       const config = normalizeSyncConfig({
         repo: { owner: found.owner, name: found.name },
         includeSecrets: false,
@@ -218,7 +215,6 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
 
       const branch = await resolveBranch(ctx, config, repoRoot);
 
-      // Fetch and apply remote config
       await fetchAndFastForward(ctx.$, repoRoot, branch);
 
       const overrides = await loadOverrides(locations);

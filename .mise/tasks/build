@@ -2,6 +2,5 @@
 #MISE description="Build the project"
 set -e
 rm -rf dist
-bun build ./src/index.ts --outdir dist --target bun
 tsc -p tsconfig.build.json
 cp -r src/command dist/command

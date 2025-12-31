@@ -1,9 +1,9 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-import { deepMerge, parseJsonc, pathExists, stripOverrides, writeJsonFile } from './config.ts';
-import type { SyncItem, SyncPlan } from './paths.ts';
-import { normalizePath } from './paths.ts';
+import { deepMerge, parseJsonc, pathExists, stripOverrides, writeJsonFile } from './config.js';
+import type { SyncItem, SyncPlan } from './paths.js';
+import { normalizePath } from './paths.js';
 
 interface ExtraSecretManifestEntry {
   sourcePath: string;

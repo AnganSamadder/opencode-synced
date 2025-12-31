@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-import type { SyncLocations } from './paths.ts';
+import type { SyncLocations } from './paths.js';
 
 export interface SyncRepoConfig {
   url?: string;

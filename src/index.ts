@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import type { Plugin } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
 
-import { applyOverridesToRuntimeConfig, loadOverrides } from './sync/config.ts';
-import { SyncCommandError, SyncConfigMissingError } from './sync/errors.ts';
-import { resolveSyncLocations } from './sync/paths.ts';
-import { createSyncService } from './sync/service.ts';
+import { applyOverridesToRuntimeConfig, loadOverrides } from './sync/config.js';
+import { SyncCommandError, SyncConfigMissingError } from './sync/errors.js';
+import { resolveSyncLocations } from './sync/paths.js';
+import { createSyncService } from './sync/service.js';
 
 interface CommandFrontmatter {
   description?: string;

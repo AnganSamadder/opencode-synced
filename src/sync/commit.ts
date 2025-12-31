@@ -1,5 +1,5 @@
 import type { PluginInput } from '@opencode-ai/plugin';
-import { extractTextFromResponse, resolveSmallModel, unwrapData } from './utils.ts';
+import { extractTextFromResponse, resolveSmallModel, unwrapData } from './utils.js';
 
 type CommitClient = PluginInput['client'];
 type Shell = PluginInput['$'];
