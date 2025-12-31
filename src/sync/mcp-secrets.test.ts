@@ -102,4 +102,28 @@ describe('extractMcpSecrets', () => {
       },
     });
   });
+
+  it('preserves other authorization schemes', () => {
+    const input = {
+      mcp: {
+        gitlab: {
+          headers: {
+            Authorization: 'Token glpat-secret',
+          },
+        },
+      },
+    };
+
+    const { sanitizedConfig } = extractMcpSecrets(input);
+
+    expect(sanitizedConfig).toEqual({
+      mcp: {
+        gitlab: {
+          headers: {
+            Authorization: 'Token {env:OPENCODE_MCP_GITLAB_AUTHORIZATION}',
+          },
+        },
+      },
+    });
+  });
 });

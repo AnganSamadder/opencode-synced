@@ -25,7 +25,7 @@ export function extractMcpSecrets(config: Record<string, unknown>): McpSecretExt
       for (const [headerName, headerValue] of Object.entries(headers)) {
         if (!isSecretString(headerValue)) continue;
         const envVar = buildHeaderEnvVar(serverName, headerName);
-        const placeholder = buildHeaderPlaceholder(String(headerValue), envVar);
+        const placeholder = buildHeaderPlaceholder(String(headerValue), envVar, headerName);
         headers[headerName] = placeholder;
         setNestedValue(secretOverrides, ['mcp', serverName, 'headers', headerName], headerValue);
       }
@@ -71,12 +71,22 @@ function toEnvToken(input: string, fallback: string): string {
   return cleaned.toUpperCase();
 }
 
-function buildHeaderPlaceholder(value: string, envVar: string): string {
-  const bearerMatch = value.match(/^Bearer\s+/i);
-  if (bearerMatch) {
-    return `${bearerMatch[0]}{env:${envVar}}`;
+function buildHeaderPlaceholder(value: string, envVar: string, headerName?: string): string {
+  if (!isAuthorizationHeader(headerName)) {
+    return `{env:${envVar}}`;
+  }
+
+  const schemeMatch = value.match(/^([A-Za-z][A-Za-z0-9+.-]*)\s+/);
+  if (schemeMatch) {
+    return `${schemeMatch[0]}{env:${envVar}}`;
   }
   return `{env:${envVar}}`;
+}
+
+function isAuthorizationHeader(headerName?: string): boolean {
+  if (!headerName) return false;
+  const normalized = headerName.toLowerCase();
+  return normalized === 'authorization' || normalized === 'proxy-authorization';
 }
 
 function setNestedValue(target: Record<string, unknown>, path: string[], value: unknown): void {
