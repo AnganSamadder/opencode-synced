@@ -1,7 +1,14 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-import { deepMerge, parseJsonc, pathExists, stripOverrides, writeJsonFile } from './config.js';
+import {
+  deepMerge,
+  hasOwn,
+  parseJsonc,
+  pathExists,
+  stripOverrides,
+  writeJsonFile,
+} from './config.js';
 import {
   extractMcpSecrets,
   hasOverrides,
@@ -297,8 +304,4 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
   }
 
   return false;
-}
-
-function hasOwn(target: Record<string, unknown>, key: string): boolean {
-  return Object.hasOwn(target, key);
 }
