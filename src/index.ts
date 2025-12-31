@@ -1,9 +1,9 @@
+import path from 'node:path';
 import type { Plugin } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
-import path from 'path';
 
 import { applyOverridesToRuntimeConfig, loadOverrides } from './sync/config.ts';
-import { SyncConfigMissingError, SyncCommandError } from './sync/errors.ts';
+import { SyncCommandError, SyncConfigMissingError } from './sync/errors.ts';
 import { resolveSyncLocations } from './sync/paths.ts';
 import { createSyncService } from './sync/service.ts';
 

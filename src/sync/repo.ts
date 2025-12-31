@@ -1,15 +1,15 @@
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import type { PluginInput } from '@opencode-ai/plugin';
-import { promises as fs } from 'fs';
-import path from 'path';
 
 import type { SyncConfig } from './config.ts';
+import { pathExists } from './config.ts';
 import {
   RepoDivergedError,
   RepoPrivateRequiredError,
   RepoVisibilityError,
   SyncCommandError,
 } from './errors.ts';
-import { pathExists } from './config.ts';
 
 export interface RepoStatus {
   branch: string;
