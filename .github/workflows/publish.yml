@@ -4,12 +4,33 @@ on:
   push:
     tags:
       - "v*"
+  repository_dispatch:
+    types:
+      - publish-package
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "npm dist-tag to publish"
+        required: false
+        default: "latest"
+      ref:
+        description: "git ref (tag or sha) to publish"
+        required: false
+        default: ""
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      NPM_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.tag || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || 'latest' }}
+      CHECKOUT_REF: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.ref || github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
     steps:
       - uses: actions/checkout@v4
+        if: env.CHECKOUT_REF == ''
+      - uses: actions/checkout@v4
+        if: env.CHECKOUT_REF != ''
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -19,6 +40,6 @@ jobs:
           bun-version: latest
       - run: bun install
       - run: bun run build
-      - run: npm publish
+      - run: npm publish --tag $NPM_TAG
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
