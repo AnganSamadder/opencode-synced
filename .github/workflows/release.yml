@@ -25,15 +25,3 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           release-type: node
           skip-github-pull-request: false
-
-  dispatch-publish:
-    needs: process
-    runs-on: ubuntu-latest
-    if: needs.process.outputs.releases_created == 'true'
-    steps:
-      - name: Dispatch publish for releases
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          event-type: publish-package
-          client-payload: '{"tag": "latest", "ref": "${{ steps.release-please.outputs.tag_name }}"}'
