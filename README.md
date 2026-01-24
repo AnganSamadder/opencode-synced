@@ -1,4 +1,4 @@
-# opencode-synced
+# @angansamadder/opencode-synced
 
 Sync global opencode configuration across machines via a GitHub repo, with optional secrets support for private repos.
 
@@ -12,6 +12,14 @@ Sync global opencode configuration across machines via a GitHub repo, with optio
 - Per-machine overrides via `opencode-synced.overrides.jsonc`
 - Custom `/sync-*` commands and `opencode_sync` tool
 
+## Fork changes (@angansamadder/opencode-synced)
+
+- Adds `autoCommit` and `autoPush` toggles (default on) for more control over commit/push behavior
+- `/sync-push` now pushes pending commits even when the working tree is clean
+- Syncs additional files (`README.md`, `opencode-synced.jsonc`, `dcp.jsonc`, `oh-my-opencode.json`, `opencode-subagent-tmux.json`) and the `profiles/` directory
+- Respects `OPENCODE_CONFIG_DIR` to override the config root
+- Removes the sync lock to avoid skipped/blocked sync commands in rapid succession
+
 ## Requirements
 
 - GitHub CLI (`gh`) installed and authenticated (`gh auth login`)
@@ -24,7 +32,7 @@ Enable the plugin in your global opencode config (opencode will install it on ne
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-synced"],
+  "plugin": ["@angansamadder/opencode-synced"],
 }
 ```
 
@@ -72,6 +80,8 @@ Create `~/.config/opencode/opencode-synced.jsonc`:
     "name": "opencode-config",
     "branch": "main",
   },
+  "autoCommit": true,
+  "autoPush": true,
   "includeSecrets": false,
   "includeMcpSecrets": false,
   "includeSessions": false,
@@ -86,7 +96,12 @@ Create `~/.config/opencode/opencode-synced.jsonc`:
 
 - `~/.config/opencode/opencode.json` and `opencode.jsonc`
 - `~/.config/opencode/AGENTS.md`
-- `~/.config/opencode/agent/`, `command/`, `mode/`, `tool/`, `themes/`, `plugin/`
+- `~/.config/opencode/README.md`
+- `~/.config/opencode/opencode-synced.jsonc`
+- `~/.config/opencode/dcp.jsonc`
+- `~/.config/opencode/oh-my-opencode.json`
+- `~/.config/opencode/opencode-subagent-tmux.json`
+- `~/.config/opencode/agent/`, `command/`, `mode/`, `tool/`, `themes/`, `plugin/`, `profiles/`
 
 ### Secrets (private repos only)
 
@@ -275,7 +290,7 @@ Then set `~/.config/opencode/opencode.json` to use:
 
 ```jsonc
 {
-  "plugin": ["opencode-synced"]
+  "plugin": ["@angansamadder/opencode-synced"]
 }
 ```
 

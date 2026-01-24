@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import type { PluginInput } from '@opencode-ai/plugin';
 import { syncLocalToRepo, syncRepoToLocal } from './apply.js';
 import { generateCommitMessage } from './commit.js';
@@ -13,8 +11,6 @@ import {
   writeSyncConfig,
 } from './config.js';
 import { SyncCommandError, SyncConfigMissingError } from './errors.js';
-import type { SyncLockInfo } from './lock.js';
-import { withSyncLock } from './lock.js';
 import { buildSyncPlan, resolveRepoRoot, resolveSyncLocations } from './paths.js';
 import {
   commitAll,
@@ -80,71 +76,37 @@ export interface SyncService {
 export function createSyncService(ctx: SyncServiceContext): SyncService {
   const locations = resolveSyncLocations();
   const log = createLogger(ctx.client);
-  const lockPath = path.join(path.dirname(locations.statePath), 'sync.lock');
-
-  const formatLockInfo = (info: SyncLockInfo | null): string => {
-    if (!info) return 'Another sync is already in progress.';
-    return `Another sync is already in progress (pid ${info.pid} on ${info.hostname}, started ${info.startedAt}).`;
-  };
-
-  const runExclusive = <T>(fn: () => Promise<T>): Promise<T> =>
-    withSyncLock(
-      lockPath,
-      {
-        onBusy: (info) => {
-          throw new SyncCommandError(formatLockInfo(info));
-        },
-      },
-      fn
-    );
-
-  const skipIfBusy = (fn: () => Promise<void>): Promise<void> =>
-    withSyncLock(
-      lockPath,
-      {
-        onBusy: (info) => {
-          log.debug('Sync already running, skipping', {
-            pid: info?.pid,
-            hostname: info?.hostname,
-            startedAt: info?.startedAt,
-          });
-          return;
-        },
-      },
-      fn
-    );
 
   return {
-    startupSync: () =>
-      skipIfBusy(async () => {
-        let config: ReturnType<typeof normalizeSyncConfig> | null = null;
-        try {
-          config = await loadSyncConfig(locations);
-        } catch (error) {
-          const message = `Failed to load opencode-synced config: ${formatError(error)}`;
-          log.error(message, { path: locations.syncConfigPath });
-          await showToast(
-            ctx.client,
-            `Failed to load opencode-synced config. Check ${locations.syncConfigPath} for JSON errors.`,
-            'error'
-          );
-          return;
-        }
-        if (!config) {
-          await showToast(
-            ctx.client,
-            'Configure opencode-synced with /sync-init or link to an existing repo with /sync-link',
-            'info'
-          );
-          return;
-        }
-        try {
-          await runStartup(ctx, locations, config, log);
-        } catch (error) {
-          log.error('Startup sync failed', { error: formatError(error) });
-          await showToast(ctx.client, formatError(error), 'error');
-        }
-      }),
+    startupSync: async () => {
+      let config: ReturnType<typeof normalizeSyncConfig> | null = null;
+      try {
+        config = await loadSyncConfig(locations);
+      } catch (error) {
+        const message = `Failed to load opencode-synced config: ${formatError(error)}`;
+        log.error(message, { path: locations.syncConfigPath });
+        await showToast(
+          ctx.client,
+          `Failed to load opencode-synced config. Check ${locations.syncConfigPath} for JSON errors.`,
+          'error'
+        );
+        return;
+      }
+      if (!config) {
+        await showToast(
+          ctx.client,
+          'Configure opencode-synced with /sync-init or link to an existing repo with /sync-link',
+          'info'
+        );
+        return;
+      }
+      try {
+        await runStartup(ctx, locations, config, log);
+      } catch (error) {
+        log.error('Startup sync failed', { error: formatError(error) });
+        await showToast(ctx.client, formatError(error), 'error');
+      }
+    },
     status: async () => {
       const config = await loadSyncConfig(locations);
       if (!config) {
@@ -174,6 +136,8 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
       const includeMcpSecrets = config.includeMcpSecrets ? 'enabled' : 'disabled';
       const includeSessions = config.includeSessions ? 'enabled' : 'disabled';
       const includePromptStash = config.includePromptStash ? 'enabled' : 'disabled';
+      const autoCommit = config.autoCommit ? 'enabled' : 'disabled';
+      const autoPush = config.autoPush ? 'enabled' : 'disabled';
       const lastPull = state.lastPull ?? 'never';
       const lastPush = state.lastPush ?? 'never';
 
@@ -194,6 +158,8 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
         `MCP secrets: ${includeMcpSecrets}`,
         `Sessions: ${includeSessions}`,
         `Prompt stash: ${includePromptStash}`,
+        `Auto-commit: ${autoCommit}`,
+        `Auto-push: ${autoPush}`,
         `Last pull: ${lastPull}`,
         `Last push: ${lastPush}`,
         `Working tree: ${changesLabel}`,
@@ -201,162 +167,28 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
 
       return statusLines.join('\n');
     },
-    init: (options: InitOptions) =>
-      runExclusive(async () => {
-        const config = await buildConfigFromInit(ctx.$, options);
+    init: async (options: InitOptions) => {
+      const config = await buildConfigFromInit(ctx.$, options);
 
-        const repoIdentifier = resolveRepoIdentifier(config);
-        const isPrivate = options.private ?? true;
+      const repoIdentifier = resolveRepoIdentifier(config);
+      const isPrivate = options.private ?? true;
 
-        const exists = await repoExists(ctx.$, repoIdentifier);
-        let created = false;
-        if (!exists) {
-          await createRepo(ctx.$, config, isPrivate);
-          created = true;
-        }
+      const exists = await repoExists(ctx.$, repoIdentifier);
+      let created = false;
+      if (!exists) {
+        await createRepo(ctx.$, config, isPrivate);
+        created = true;
+      }
 
-        await writeSyncConfig(locations, config);
-        const repoRoot = resolveRepoRoot(config, locations);
-        await ensureRepoCloned(ctx.$, config, repoRoot);
-        await ensureSecretsPolicy(ctx, config);
+      await writeSyncConfig(locations, config);
+      const repoRoot = resolveRepoRoot(config, locations);
+      await ensureRepoCloned(ctx.$, config, repoRoot);
+      await ensureSecretsPolicy(ctx, config);
 
-        if (created) {
-          const overrides = await loadOverrides(locations);
-          const plan = buildSyncPlan(config, locations, repoRoot);
-          await syncLocalToRepo(plan, overrides, {
-            overridesPath: locations.overridesPath,
-            allowMcpSecrets: canCommitMcpSecrets(config),
-          });
+      let autoCommitNote = '';
+      let autoPushNote = '';
 
-          const dirty = await hasLocalChanges(ctx.$, repoRoot);
-          if (dirty) {
-            const branch = resolveRepoBranch(config);
-            await commitAll(ctx.$, repoRoot, 'Initial sync from opencode-synced');
-            await pushBranch(ctx.$, repoRoot, branch);
-            await writeState(locations, { lastPush: new Date().toISOString() });
-          }
-        }
-
-        const lines = [
-          'opencode-synced configured.',
-          `Repo: ${repoIdentifier}${created ? ' (created)' : ''}`,
-          `Branch: ${resolveRepoBranch(config)}`,
-          `Local repo: ${repoRoot}`,
-        ];
-
-        return lines.join('\n');
-      }),
-    link: (options: LinkOptions) =>
-      runExclusive(async () => {
-        const found = await findSyncRepo(ctx.$, options.repo);
-
-        if (!found) {
-          const searchedFor = options.repo
-            ? `"${options.repo}"`
-            : 'common sync repo names (my-opencode-config, opencode-config, etc.)';
-
-          const lines = [
-            `Could not find an existing sync repo. Searched for: ${searchedFor}`,
-            '',
-            'To link to an existing repo, run:',
-            '  /sync-link <repo-name>',
-            '',
-            'To create a new sync repo, run:',
-            '  /sync-init',
-          ];
-          return lines.join('\n');
-        }
-
-        const config = normalizeSyncConfig({
-          repo: { owner: found.owner, name: found.name },
-          includeSecrets: false,
-          includeMcpSecrets: false,
-          includeSessions: false,
-          includePromptStash: false,
-          extraSecretPaths: [],
-        });
-
-        await writeSyncConfig(locations, config);
-        const repoRoot = resolveRepoRoot(config, locations);
-        await ensureRepoCloned(ctx.$, config, repoRoot);
-
-        const branch = await resolveBranch(ctx, config, repoRoot);
-
-        await fetchAndFastForward(ctx.$, repoRoot, branch);
-
-        const overrides = await loadOverrides(locations);
-        const plan = buildSyncPlan(config, locations, repoRoot);
-        await syncRepoToLocal(plan, overrides);
-
-        await writeState(locations, {
-          lastPull: new Date().toISOString(),
-          lastRemoteUpdate: new Date().toISOString(),
-        });
-
-        const lines = [
-          `Linked to existing sync repo: ${found.owner}/${found.name}`,
-          '',
-          'Your local opencode config has been OVERWRITTEN with the synced config.',
-          'Your local overrides file was preserved and applied on top.',
-          '',
-          'Restart opencode to apply the new settings.',
-          '',
-          found.isPrivate
-            ? 'To enable secrets sync, run: /sync-enable-secrets'
-            : 'Note: Repo is public. Secrets sync is disabled.',
-        ];
-
-        await showToast(ctx.client, 'Config synced. Restart opencode to apply.', 'info');
-        return lines.join('\n');
-      }),
-    pull: () =>
-      runExclusive(async () => {
-        const config = await getConfigOrThrow(locations);
-        const repoRoot = resolveRepoRoot(config, locations);
-        await ensureRepoCloned(ctx.$, config, repoRoot);
-        await ensureSecretsPolicy(ctx, config);
-
-        const branch = await resolveBranch(ctx, config, repoRoot);
-
-        const dirty = await hasLocalChanges(ctx.$, repoRoot);
-        if (dirty) {
-          throw new SyncCommandError(
-            `Local sync repo has uncommitted changes. Resolve in ${repoRoot} before pulling.`
-          );
-        }
-
-        const update = await fetchAndFastForward(ctx.$, repoRoot, branch);
-        if (!update.updated) {
-          return 'Already up to date.';
-        }
-
-        const overrides = await loadOverrides(locations);
-        const plan = buildSyncPlan(config, locations, repoRoot);
-        await syncRepoToLocal(plan, overrides);
-
-        await writeState(locations, {
-          lastPull: new Date().toISOString(),
-          lastRemoteUpdate: new Date().toISOString(),
-        });
-
-        await showToast(ctx.client, 'Config updated. Restart opencode to apply.', 'info');
-        return 'Remote config applied. Restart opencode to use new settings.';
-      }),
-    push: () =>
-      runExclusive(async () => {
-        const config = await getConfigOrThrow(locations);
-        const repoRoot = resolveRepoRoot(config, locations);
-        await ensureRepoCloned(ctx.$, config, repoRoot);
-        await ensureSecretsPolicy(ctx, config);
-        const branch = await resolveBranch(ctx, config, repoRoot);
-
-        const preDirty = await hasLocalChanges(ctx.$, repoRoot);
-        if (preDirty) {
-          throw new SyncCommandError(
-            `Local sync repo has uncommitted changes. Resolve in ${repoRoot} before pushing.`
-          );
-        }
-
+      if (created) {
         const overrides = await loadOverrides(locations);
         const plan = buildSyncPlan(config, locations, repoRoot);
         await syncLocalToRepo(plan, overrides, {
@@ -365,72 +197,234 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
         });
 
         const dirty = await hasLocalChanges(ctx.$, repoRoot);
-        if (!dirty) {
-          return 'No local changes to push.';
+        if (dirty) {
+          if (!config.autoCommit) {
+            autoCommitNote = `Auto-commit is disabled. Commit and push from: ${repoRoot}`;
+          } else {
+            const branch = resolveRepoBranch(config);
+            const message = 'Initial sync from opencode-synced';
+            await commitAll(ctx.$, repoRoot, message);
+            if (!config.autoPush) {
+              autoPushNote = `Auto-push is disabled. Push from: ${repoRoot}`;
+            } else {
+              await pushBranch(ctx.$, repoRoot, branch);
+              await writeState(locations, { lastPush: new Date().toISOString() });
+            }
+          }
+        }
+      }
+
+      const lines = [
+        'opencode-synced configured.',
+        `Repo: ${repoIdentifier}${created ? ' (created)' : ''}`,
+        `Branch: ${resolveRepoBranch(config)}`,
+        `Local repo: ${repoRoot}`,
+      ];
+      if (autoCommitNote) lines.push(autoCommitNote);
+      if (autoPushNote) lines.push(autoPushNote);
+
+      return lines.join('\n');
+    },
+    link: async (options: LinkOptions) => {
+      const found = await findSyncRepo(ctx.$, options.repo);
+
+      if (!found) {
+        const searchedFor = options.repo
+          ? `"${options.repo}"`
+          : 'common sync repo names (my-opencode-config, opencode-config, etc.)';
+
+        const lines = [
+          `Could not find an existing sync repo. Searched for: ${searchedFor}`,
+          '',
+          'To link to an existing repo, run:',
+          '  /sync-link <repo-name>',
+          '',
+          'To create a new sync repo, run:',
+          '  /sync-init',
+        ];
+        return lines.join('\n');
+      }
+
+      const config = normalizeSyncConfig({
+        repo: { owner: found.owner, name: found.name },
+        includeSecrets: false,
+        includeMcpSecrets: false,
+        includeSessions: false,
+        includePromptStash: false,
+        extraSecretPaths: [],
+        autoCommit: true,
+        autoPush: true,
+      });
+
+      await writeSyncConfig(locations, config);
+      const repoRoot = resolveRepoRoot(config, locations);
+      await ensureRepoCloned(ctx.$, config, repoRoot);
+
+      const branch = await resolveBranch(ctx, config, repoRoot);
+
+      await fetchAndFastForward(ctx.$, repoRoot, branch);
+
+      const overrides = await loadOverrides(locations);
+      const plan = buildSyncPlan(config, locations, repoRoot);
+      await syncRepoToLocal(plan, overrides);
+
+      await writeState(locations, {
+        lastPull: new Date().toISOString(),
+        lastRemoteUpdate: new Date().toISOString(),
+      });
+
+      const lines = [
+        `Linked to existing sync repo: ${found.owner}/${found.name}`,
+        '',
+        'Your local opencode config has been OVERWRITTEN with the synced config.',
+        'Your local overrides file was preserved and applied on top.',
+        '',
+        'Restart opencode to apply the new settings.',
+        '',
+        found.isPrivate
+          ? 'To enable secrets sync, run: /sync-enable-secrets'
+          : 'Note: Repo is public. Secrets sync is disabled.',
+      ];
+
+      await showToast(ctx.client, 'Config synced. Restart opencode to apply.', 'info');
+      return lines.join('\n');
+    },
+    pull: async () => {
+      const config = await getConfigOrThrow(locations);
+      const repoRoot = resolveRepoRoot(config, locations);
+      await ensureRepoCloned(ctx.$, config, repoRoot);
+      await ensureSecretsPolicy(ctx, config);
+
+      const branch = await resolveBranch(ctx, config, repoRoot);
+
+      const dirty = await hasLocalChanges(ctx.$, repoRoot);
+      if (dirty) {
+        throw new SyncCommandError(
+          `Local sync repo has uncommitted changes. Resolve in ${repoRoot} before pulling.`
+        );
+      }
+
+      const update = await fetchAndFastForward(ctx.$, repoRoot, branch);
+      if (!update.updated) {
+        return 'Already up to date.';
+      }
+
+      const overrides = await loadOverrides(locations);
+      const plan = buildSyncPlan(config, locations, repoRoot);
+      await syncRepoToLocal(plan, overrides);
+
+      await writeState(locations, {
+        lastPull: new Date().toISOString(),
+        lastRemoteUpdate: new Date().toISOString(),
+      });
+
+      await showToast(ctx.client, 'Config updated. Restart opencode to apply.', 'info');
+      return 'Remote config applied. Restart opencode to use new settings.';
+    },
+    push: async () => {
+      const config = await getConfigOrThrow(locations);
+      const repoRoot = resolveRepoRoot(config, locations);
+      await ensureRepoCloned(ctx.$, config, repoRoot);
+      await ensureSecretsPolicy(ctx, config);
+      const branch = await resolveBranch(ctx, config, repoRoot);
+
+      const overrides = await loadOverrides(locations);
+      const plan = buildSyncPlan(config, locations, repoRoot);
+      await syncLocalToRepo(plan, overrides, {
+        overridesPath: locations.overridesPath,
+        allowMcpSecrets: canCommitMcpSecrets(config),
+      });
+
+      const dirty = await hasLocalChanges(ctx.$, repoRoot);
+      const pendingCommits = await getUnpushedCommits(ctx.$, repoRoot);
+      if (!dirty && pendingCommits.length === 0) {
+        return 'No changes to push.';
+      }
+
+      if (dirty) {
+        if (!config.autoCommit) {
+          return `Auto-commit is disabled. Commit and push from: ${repoRoot}`;
         }
 
         const message = await generateCommitMessage({ client: ctx.client, $: ctx.$ }, repoRoot);
         await commitAll(ctx.$, repoRoot, message);
-        await pushBranch(ctx.$, repoRoot, branch);
 
+        if (!config.autoPush) {
+          return `Committed changes: ${message}. Auto-push is disabled. Push from: ${repoRoot}`;
+        }
+
+        await pushBranch(ctx.$, repoRoot, branch);
         await writeState(locations, {
           lastPush: new Date().toISOString(),
         });
 
         return `Pushed changes: ${message}`;
-      }),
-    enableSecrets: (options?: { extraSecretPaths?: string[]; includeMcpSecrets?: boolean }) =>
-      runExclusive(async () => {
-        const config = await getConfigOrThrow(locations);
-        config.includeSecrets = true;
-        if (options?.extraSecretPaths) {
-          config.extraSecretPaths = options.extraSecretPaths;
+      }
+
+      if (!config.autoPush) {
+        return `Auto-push is disabled. Push from: ${repoRoot}`;
+      }
+
+      await pushBranch(ctx.$, repoRoot, branch);
+      await writeState(locations, {
+        lastPush: new Date().toISOString(),
+      });
+
+      return 'Pushed pending commits.';
+    },
+    enableSecrets: async (options?: {
+      extraSecretPaths?: string[];
+      includeMcpSecrets?: boolean;
+    }) => {
+      const config = await getConfigOrThrow(locations);
+      config.includeSecrets = true;
+      if (options?.extraSecretPaths) {
+        config.extraSecretPaths = options.extraSecretPaths;
+      }
+      if (options?.includeMcpSecrets !== undefined) {
+        config.includeMcpSecrets = options.includeMcpSecrets;
+      }
+
+      await ensureRepoPrivate(ctx.$, config);
+      await writeSyncConfig(locations, config);
+
+      return 'Secrets sync enabled for this repo.';
+    },
+    resolve: async () => {
+      const config = await getConfigOrThrow(locations);
+      const repoRoot = resolveRepoRoot(config, locations);
+      await ensureRepoCloned(ctx.$, config, repoRoot);
+
+      const dirty = await hasLocalChanges(ctx.$, repoRoot);
+      if (!dirty) {
+        return 'No uncommitted changes to resolve.';
+      }
+
+      const status = await getRepoStatus(ctx.$, repoRoot);
+      const decision = await analyzeAndDecideResolution(
+        { client: ctx.client, $: ctx.$ },
+        repoRoot,
+        status.changes
+      );
+
+      if (decision.action === 'commit') {
+        const message = decision.message ?? 'Sync: Auto-resolved uncommitted changes';
+        await commitAll(ctx.$, repoRoot, message);
+        return `Resolved by committing changes: ${message}`;
+      }
+
+      if (decision.action === 'reset') {
+        try {
+          await ctx.$`git -C ${repoRoot} reset --hard HEAD`.quiet();
+          await ctx.$`git -C ${repoRoot} clean -fd`.quiet();
+          return 'Resolved by discarding all uncommitted changes.';
+        } catch (error) {
+          throw new SyncCommandError(`Failed to reset changes: ${formatError(error)}`);
         }
-        if (options?.includeMcpSecrets !== undefined) {
-          config.includeMcpSecrets = options.includeMcpSecrets;
-        }
+      }
 
-        await ensureRepoPrivate(ctx.$, config);
-        await writeSyncConfig(locations, config);
-
-        return 'Secrets sync enabled for this repo.';
-      }),
-    resolve: () =>
-      runExclusive(async () => {
-        const config = await getConfigOrThrow(locations);
-        const repoRoot = resolveRepoRoot(config, locations);
-        await ensureRepoCloned(ctx.$, config, repoRoot);
-
-        const dirty = await hasLocalChanges(ctx.$, repoRoot);
-        if (!dirty) {
-          return 'No uncommitted changes to resolve.';
-        }
-
-        const status = await getRepoStatus(ctx.$, repoRoot);
-        const decision = await analyzeAndDecideResolution(
-          { client: ctx.client, $: ctx.$ },
-          repoRoot,
-          status.changes
-        );
-
-        if (decision.action === 'commit') {
-          const message = decision.message ?? 'Sync: Auto-resolved uncommitted changes';
-          await commitAll(ctx.$, repoRoot, message);
-          return `Resolved by committing changes: ${message}`;
-        }
-
-        if (decision.action === 'reset') {
-          try {
-            await ctx.$`git -C ${repoRoot} reset --hard HEAD`.quiet();
-            await ctx.$`git -C ${repoRoot} clean -fd`.quiet();
-            return 'Resolved by discarding all uncommitted changes.';
-          } catch (error) {
-            throw new SyncCommandError(`Failed to reset changes: ${formatError(error)}`);
-          }
-        }
-
-        return `Unable to automatically resolve. Please manually resolve in: ${repoRoot}`;
-      }),
+      return `Unable to automatically resolve. Please manually resolve in: ${repoRoot}`;
+    },
   };
 }
 
@@ -485,9 +479,31 @@ async function runStartup(
     return;
   }
 
+  if (!config.autoCommit) {
+    log.warn('Auto-commit disabled, skipping push', { repoRoot });
+    await showToast(
+      ctx.client,
+      `Auto-commit is disabled. Run /sync-push or commit manually in: ${repoRoot}`,
+      'info'
+    );
+    return;
+  }
+
   const message = await generateCommitMessage({ client: ctx.client, $: ctx.$ }, repoRoot);
-  log.info('Pushing local changes', { message });
+  log.info('Committing local changes', { message });
   await commitAll(ctx.$, repoRoot, message);
+
+  if (!config.autoPush) {
+    log.warn('Auto-push disabled, leaving commit locally', { repoRoot });
+    await showToast(
+      ctx.client,
+      `Auto-push is disabled. Run /sync-push or push manually from: ${repoRoot}`,
+      'info'
+    );
+    return;
+  }
+
+  log.info('Pushing local changes', { message });
   await pushBranch(ctx.$, repoRoot, branch);
   await writeState(locations, {
     lastPush: new Date().toISOString(),
@@ -586,6 +602,18 @@ async function createRepo(
     await $`gh repo create ${owner}/${name} ${visibility} --confirm`.quiet();
   } catch (error) {
     throw new SyncCommandError(`Failed to create repo: ${formatError(error)}`);
+  }
+}
+
+async function getUnpushedCommits($: Shell, repoRoot: string): Promise<string[]> {
+  try {
+    const output = await $`git -C ${repoRoot} log @{u}..HEAD --oneline`.quiet().text();
+    return output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
   }
 }
 

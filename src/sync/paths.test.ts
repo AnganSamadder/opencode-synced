@@ -26,10 +26,10 @@ describe('resolveXdgPaths', () => {
 });
 
 describe('resolveSyncLocations', () => {
-  it('respects opencode_config_dir', () => {
+  it('respects OPENCODE_CONFIG_DIR', () => {
     const env = {
       HOME: '/home/test',
-      opencode_config_dir: '/custom/opencode',
+      OPENCODE_CONFIG_DIR: '/custom/opencode',
     } as NodeJS.ProcessEnv;
     const locations = resolveSyncLocations(env, 'linux');
 

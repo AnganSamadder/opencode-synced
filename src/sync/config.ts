@@ -13,6 +13,8 @@ export interface SyncRepoConfig {
 export interface SyncConfig {
   repo?: SyncRepoConfig;
   localRepoPath?: string;
+  autoCommit?: boolean;
+  autoPush?: boolean;
   includeSecrets?: boolean;
   includeMcpSecrets?: boolean;
   includeSessions?: boolean;
@@ -47,6 +49,8 @@ export async function chmodIfExists(filePath: string, mode: number): Promise<voi
 
 export function normalizeSyncConfig(config: SyncConfig): SyncConfig {
   const includeSecrets = Boolean(config.includeSecrets);
+  const autoCommit = config.autoCommit !== false;
+  const autoPush = autoCommit ? config.autoPush !== false : false;
   return {
     includeSecrets,
     includeMcpSecrets: includeSecrets ? Boolean(config.includeMcpSecrets) : false,
@@ -55,6 +59,8 @@ export function normalizeSyncConfig(config: SyncConfig): SyncConfig {
     extraSecretPaths: Array.isArray(config.extraSecretPaths) ? config.extraSecretPaths : [],
     localRepoPath: config.localRepoPath,
     repo: config.repo,
+    autoCommit,
+    autoPush,
   };
 }
 

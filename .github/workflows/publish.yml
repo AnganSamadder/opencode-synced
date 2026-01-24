@@ -1,100 +1,24 @@
-name: Publish Package
+name: Publish
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'npm tag (latest or next)'
-        required: true
-        type: choice
-        options:
-          - latest
-          - next
-  repository_dispatch:
-    types: [publish-package]
-
-permissions:
-  id-token: write
-  contents: read
+  push:
+    tags:
+      - "v*"
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    outputs:
-      requested_tag: ${{ steps.publish.outputs.requested_tag }}
-      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: jdx/mise-action@d6e32c1796099e0f1f3ac741c220a8b7eae9e5dd
+      - uses: actions/setup-node@v4
         with:
-          install: true
-          cache: true
-          experimental: true
-
-      - name: Setup
-        run: mise run setup
-
-      - name: Build
-        run: mise run build
-
-      - id: inputs
-        uses: simenandre/setup-inputs@v1
-
-      - name: Publish candidate to npm with OIDC
-        id: publish
-        run: |
-          TAG="${{ steps.inputs.outputs.tag }}"
-          if [ -z "$TAG" ]; then
-            TAG="latest"
-          fi
-
-          echo "requested_tag=$TAG" >> "$GITHUB_OUTPUT"
-
-          CANDIDATE_TAG="next"
-          echo "Publishing candidate with tag: $CANDIDATE_TAG (requested: $TAG)"
-          mise run publish --tag "$CANDIDATE_TAG"
-
-      - name: Resolve published version
-        id: version
-        run: |
-          VERSION=$(npm view opencode-synced@next version)
-          if [ -z "$VERSION" ]; then
-            echo "Failed to resolve version from npm tag: next"
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-  smoke:
-    needs: publish
-    uses: ./.github/workflows/opencode-smoke.yml
-    with:
-      tag: next
-      timeout: 20
-
-  promote_latest:
-    needs: [publish, smoke]
-    if: needs.publish.outputs.requested_tag == 'latest'
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: jdx/mise-action@d6e32c1796099e0f1f3ac741c220a8b7eae9e5dd
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - uses: oven-sh/setup-bun@v2
         with:
-          install: true
-          cache: true
-          experimental: true
-
-      - name: Promote latest dist-tag
-        run: |
-          VERSION="${{ needs.publish.outputs.version }}"
-          if [ -z "$VERSION" ]; then
-            echo "Missing published version."
-            exit 1
-          fi
-
-          echo "Promoting opencode-synced@$VERSION to latest"
-          npm dist-tag add "opencode-synced@$VERSION" latest
+          bun-version: latest
+      - run: bun install
+      - run: bun run build
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

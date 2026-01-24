@@ -47,10 +47,14 @@ const DEFAULT_CONFIG_NAME = 'opencode.json';
 const DEFAULT_CONFIGC_NAME = 'opencode.jsonc';
 const DEFAULT_AGENTS_NAME = 'AGENTS.md';
 const DEFAULT_SYNC_CONFIG_NAME = 'opencode-synced.jsonc';
+const DEFAULT_README_NAME = 'README.md';
+const DEFAULT_DCP_NAME = 'dcp.jsonc';
+const DEFAULT_OH_MY_OPENCODE_NAME = 'oh-my-opencode.json';
+const DEFAULT_SUBAGENT_TMUX_NAME = 'opencode-subagent-tmux.json';
 const DEFAULT_OVERRIDES_NAME = 'opencode-synced.overrides.jsonc';
 const DEFAULT_STATE_NAME = 'sync-state.json';
 
-const CONFIG_DIRS = ['agent', 'command', 'mode', 'tool', 'themes', 'plugin'];
+const CONFIG_DIRS = ['agent', 'command', 'mode', 'tool', 'themes', 'plugin', 'profiles'];
 const SESSION_DIRS = ['storage/session', 'storage/message', 'storage/part', 'storage/session_diff'];
 const PROMPT_STASH_FILES = ['prompt-stash.jsonl', 'prompt-history.jsonl'];
 
@@ -100,7 +104,7 @@ export function resolveSyncLocations(
   platform: NodeJS.Platform = process.platform
 ): SyncLocations {
   const xdg = resolveXdgPaths(env, platform);
-  const customConfigDir = env.opencode_config_dir;
+  const customConfigDir = env.OPENCODE_CONFIG_DIR;
   const configRoot = customConfigDir
     ? path.resolve(expandHome(customConfigDir, xdg.homeDir))
     : path.join(xdg.configDir, 'opencode');
@@ -191,6 +195,11 @@ export function buildSyncPlan(
   addFile(DEFAULT_CONFIG_NAME, false, true);
   addFile(DEFAULT_CONFIGC_NAME, false, true);
   addFile(DEFAULT_AGENTS_NAME, false, false);
+  addFile(DEFAULT_README_NAME, false, false);
+  addFile(DEFAULT_SYNC_CONFIG_NAME, false, false);
+  addFile(DEFAULT_DCP_NAME, false, false);
+  addFile(DEFAULT_OH_MY_OPENCODE_NAME, false, false);
+  addFile(DEFAULT_SUBAGENT_TMUX_NAME, false, false);
 
   for (const dirName of CONFIG_DIRS) {
     items.push({

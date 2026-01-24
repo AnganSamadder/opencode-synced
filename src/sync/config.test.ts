@@ -72,6 +72,18 @@ describe('normalizeSyncConfig', () => {
     });
     expect(normalized.includeMcpSecrets).toBe(true);
   });
+
+  it('defaults auto-commit and auto-push to true', () => {
+    const normalized = normalizeSyncConfig({});
+    expect(normalized.autoCommit).toBe(true);
+    expect(normalized.autoPush).toBe(true);
+  });
+
+  it('disables auto-push when auto-commit is false', () => {
+    const normalized = normalizeSyncConfig({ autoCommit: false, autoPush: true });
+    expect(normalized.autoCommit).toBe(false);
+    expect(normalized.autoPush).toBe(false);
+  });
 });
 
 describe('canCommitMcpSecrets', () => {
