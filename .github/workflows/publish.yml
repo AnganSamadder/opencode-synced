@@ -21,8 +21,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
-          token: ""
       - run: bun install
       - run: bun run build
-      - run: npm publish --access public --provenance
+      - run: |
+          npm config delete //registry.npmjs.org/:_authToken || true
+          unset NODE_AUTH_TOKEN
+          npm publish --access public --provenance
