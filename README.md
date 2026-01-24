@@ -1,4 +1,4 @@
-# @angansamadder/opencode-synced
+# @angan/opencode-synced
 
 Sync global opencode configuration across machines via a GitHub repo, with optional secrets support for private repos.
 
@@ -12,7 +12,7 @@ Sync global opencode configuration across machines via a GitHub repo, with optio
 - Per-machine overrides via `opencode-synced.overrides.jsonc`
 - Custom `/sync-*` commands and `opencode_sync` tool
 
-## Fork changes (@angansamadder/opencode-synced)
+## Fork changes (@angan/opencode-synced)
 
 - Adds `autoCommit` and `autoPush` toggles (default on) for more control over commit/push behavior
 - `/sync-push` now pushes pending commits even when the working tree is clean
@@ -32,7 +32,7 @@ Enable the plugin in your global opencode config (opencode will install it on ne
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@angansamadder/opencode-synced"],
+  "plugin": ["@angan/opencode-synced"],
 }
 ```
 
@@ -290,7 +290,7 @@ Then set `~/.config/opencode/opencode.json` to use:
 
 ```jsonc
 {
-  "plugin": ["@angansamadder/opencode-synced"]
+  "plugin": ["@angan/opencode-synced"]
 }
 ```
 
