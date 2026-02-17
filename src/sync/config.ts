@@ -20,6 +20,23 @@ export interface SyncConfig {
   includeSessions?: boolean;
   includePromptStash?: boolean;
   extraSecretPaths?: string[];
+  /**
+   * Base directory for local plugins.
+   * Can be a single path string, or an object mapping platform to path.
+   * Enables portable plugin paths when syncing across machines.
+   *
+   * @example
+   * // Single path (same on all machines)
+   * pluginBaseDir: "~/Code/opencode-plugins"
+   *
+   * // Per-platform paths
+   * pluginBaseDir: {
+   *   darwin: "/Users/angansamadder/Code/opencode-plugins",
+   *   linux: "/home/angan/code/opencode-plugins",
+   *   win32: "C:\\Users\\angan\\Code\\opencode-plugins"
+   * }
+   */
+  pluginBaseDir?: string | Record<NodeJS.Platform, string>;
 }
 
 export interface SyncState {
@@ -61,6 +78,7 @@ export function normalizeSyncConfig(config: SyncConfig): SyncConfig {
     repo: config.repo,
     autoCommit,
     autoPush,
+    pluginBaseDir: config.pluginBaseDir,
   };
 }
 

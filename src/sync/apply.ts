@@ -7,6 +7,7 @@ import {
   hasOwn,
   parseJsonc,
   pathExists,
+  type SyncConfig,
   stripOverrides,
   writeJsonFile,
 } from './config.js';
@@ -18,6 +19,11 @@ import {
 } from './mcp-secrets.js';
 import type { SyncItem, SyncPlan } from './paths.js';
 import { normalizePath } from './paths.js';
+import {
+  resolvePluginBaseDir,
+  transformPluginsForLocal,
+  transformPluginsForRepo,
+} from './plugin-path.js';
 
 interface ExtraSecretManifestEntry {
   sourcePath: string;
@@ -31,13 +37,20 @@ interface ExtraSecretManifest {
 
 export async function syncRepoToLocal(
   plan: SyncPlan,
-  overrides: Record<string, unknown> | null
+  overrides: Record<string, unknown> | null,
+  config: SyncConfig | null = null
 ): Promise<void> {
+  const pluginBaseDir = resolvePluginBaseDir(config, plan.homeDir, plan.platform);
+
   for (const item of plan.items) {
     await copyItem(item.repoPath, item.localPath, item.type);
   }
 
   await applyExtraSecrets(plan, true);
+
+  if (pluginBaseDir) {
+    await transformPluginPathsInConfig(plan, pluginBaseDir, 'toLocal');
+  }
 
   if (overrides && Object.keys(overrides).length > 0) {
     await applyOverridesToLocalConfig(plan, overrides);
@@ -47,8 +60,10 @@ export async function syncRepoToLocal(
 export async function syncLocalToRepo(
   plan: SyncPlan,
   overrides: Record<string, unknown> | null,
-  options: { overridesPath?: string; allowMcpSecrets?: boolean } = {}
+  options: { overridesPath?: string; allowMcpSecrets?: boolean; config?: SyncConfig | null } = {}
 ): Promise<void> {
+  const config = options.config ?? null;
+  const pluginBaseDir = resolvePluginBaseDir(config, plan.homeDir, plan.platform);
   const configItems = plan.items.filter((item) => item.isConfigFile);
   const sanitizedConfigs = new Map<string, Record<string, unknown>>();
   let secretOverrides: Record<string, unknown> = {};
@@ -83,7 +98,14 @@ export async function syncLocalToRepo(
   for (const item of plan.items) {
     if (item.isConfigFile) {
       const sanitized = sanitizedConfigs.get(item.localPath);
-      await copyConfigForRepo(item, overridesForStrip, plan.repoRoot, sanitized);
+      await copyConfigForRepo(
+        item,
+        overridesForStrip,
+        plan.repoRoot,
+        sanitized,
+        pluginBaseDir,
+        plan.platform
+      );
       continue;
     }
 
@@ -119,7 +141,9 @@ async function copyConfigForRepo(
   item: SyncItem,
   overrides: Record<string, unknown> | null,
   repoRoot: string,
-  configOverride?: Record<string, unknown>
+  configOverride: Record<string, unknown> | undefined,
+  pluginBaseDir: string | null,
+  platform: NodeJS.Platform
 ): Promise<void> {
   if (!(await pathExists(item.localPath))) {
     await removePath(item.repoPath);
@@ -131,6 +155,11 @@ async function copyConfigForRepo(
     parseJsonc<Record<string, unknown>>(await fs.readFile(item.localPath, 'utf8'));
   const baseConfig = await readRepoConfig(item, repoRoot);
   const effectiveOverrides = overrides ?? {};
+
+  if (pluginBaseDir && hasOwn(localConfig, 'plugin') && Array.isArray(localConfig.plugin)) {
+    localConfig.plugin = transformPluginsForRepo(localConfig.plugin, pluginBaseDir, platform);
+  }
+
   if (baseConfig) {
     const expectedLocal = deepMerge(baseConfig, effectiveOverrides) as Record<string, unknown>;
     if (isDeepEqual(localConfig, expectedLocal)) {
@@ -305,4 +334,32 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
   }
 
   return false;
+}
+
+async function transformPluginPathsInConfig(
+  plan: SyncPlan,
+  pluginBaseDir: string,
+  direction: 'toLocal'
+): Promise<void> {
+  const configFiles = plan.items.filter((item) => item.isConfigFile);
+
+  for (const item of configFiles) {
+    if (!(await pathExists(item.localPath))) continue;
+    if (!item.localPath.includes('opencode.json')) continue;
+
+    const content = await fs.readFile(item.localPath, 'utf8');
+    const parsed = parseJsonc<Record<string, unknown>>(content);
+
+    if (!hasOwn(parsed, 'plugin') || !Array.isArray(parsed.plugin)) continue;
+
+    const transformed = transformPluginsForLocal(parsed.plugin, pluginBaseDir);
+    if (isDeepEqual(parsed.plugin, transformed)) continue;
+
+    parsed.plugin = transformed;
+    const stat = await fs.stat(item.localPath);
+    await writeJsonFile(item.localPath, parsed, {
+      jsonc: item.localPath.endsWith('.jsonc'),
+      mode: stat.mode & 0o777,
+    });
+  }
 }

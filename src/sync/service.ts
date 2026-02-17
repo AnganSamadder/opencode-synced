@@ -53,6 +53,7 @@ interface InitOptions {
   private?: boolean;
   extraSecretPaths?: string[];
   localRepoPath?: string;
+  pluginBaseDir?: Record<NodeJS.Platform, string>;
 }
 
 interface LinkOptions {
@@ -266,7 +267,7 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
 
       const overrides = await loadOverrides(locations);
       const plan = buildSyncPlan(config, locations, repoRoot);
-      await syncRepoToLocal(plan, overrides);
+      await syncRepoToLocal(plan, overrides, config);
 
       await writeState(locations, {
         lastPull: new Date().toISOString(),
@@ -311,7 +312,7 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
 
       const overrides = await loadOverrides(locations);
       const plan = buildSyncPlan(config, locations, repoRoot);
-      await syncRepoToLocal(plan, overrides);
+      await syncRepoToLocal(plan, overrides, config);
 
       await writeState(locations, {
         lastPull: new Date().toISOString(),
@@ -333,6 +334,7 @@ export function createSyncService(ctx: SyncServiceContext): SyncService {
       await syncLocalToRepo(plan, overrides, {
         overridesPath: locations.overridesPath,
         allowMcpSecrets: canCommitMcpSecrets(config),
+        config,
       });
 
       const dirty = await hasLocalChanges(ctx.$, repoRoot);
@@ -458,7 +460,7 @@ async function runStartup(
     log.info('Pulled remote changes', { branch });
     const overrides = await loadOverrides(locations);
     const plan = buildSyncPlan(config, locations, repoRoot);
-    await syncRepoToLocal(plan, overrides);
+    await syncRepoToLocal(plan, overrides, config);
     await writeState(locations, {
       lastPull: new Date().toISOString(),
       lastRemoteUpdate: new Date().toISOString(),
@@ -472,6 +474,7 @@ async function runStartup(
   await syncLocalToRepo(plan, overrides, {
     overridesPath: locations.overridesPath,
     allowMcpSecrets: canCommitMcpSecrets(config),
+    config,
   });
   const changes = await hasLocalChanges(ctx.$, repoRoot);
   if (!changes) {
@@ -555,6 +558,7 @@ async function buildConfigFromInit($: Shell, options: InitOptions) {
     includePromptStash: options.includePromptStash ?? false,
     extraSecretPaths: options.extraSecretPaths ?? [],
     localRepoPath: options.localRepoPath,
+    pluginBaseDir: options.pluginBaseDir,
   });
 }
 

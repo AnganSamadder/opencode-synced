@@ -8,6 +8,7 @@ import { applyOverridesToRuntimeConfig, loadOverrides } from './sync/config.js';
 import { SyncCommandError, SyncConfigMissingError } from './sync/errors.js';
 import { resolveSyncLocations } from './sync/paths.js';
 import { createSyncService } from './sync/service.js';
+import { ensureSkillSymlinks } from './sync/skills.js';
 
 interface CommandFrontmatter {
   description?: string;
@@ -141,6 +142,12 @@ export const opencodeConfigSync: Plugin = async (ctx) => {
       private: tool.schema.boolean().optional().describe('Create repo as private'),
       extraSecretPaths: tool.schema.array(tool.schema.string()).optional(),
       localRepoPath: tool.schema.string().optional().describe('Override local repo path'),
+      pluginBaseDir: tool.schema
+        .record(tool.schema.string(), tool.schema.string())
+        .optional()
+        .describe(
+          'Per-platform plugin base dir for portable paths (e.g., {"darwin": "/Users/.../plugins", "linux": "/home/.../plugins"})'
+        ),
     },
     async execute(args) {
       try {
@@ -162,6 +169,7 @@ export const opencodeConfigSync: Plugin = async (ctx) => {
             private: args.private,
             extraSecretPaths: args.extraSecretPaths,
             localRepoPath: args.localRepoPath,
+            pluginBaseDir: args.pluginBaseDir as Record<NodeJS.Platform, string> | undefined,
           });
         }
         if (args.command === 'link') {
@@ -197,7 +205,14 @@ export const opencodeConfigSync: Plugin = async (ctx) => {
 
   // Delay startup sync slightly to ensure TUI is connected
   setTimeout(() => {
-    void service.startupSync();
+    void (async () => {
+      try {
+        await ensureSkillSymlinks();
+      } catch (err) {
+        console.error('Failed to ensure skill symlinks:', err);
+      }
+      void service.startupSync();
+    })();
   }, 1000);
 
   return {
