@@ -35,12 +35,30 @@ interface ExtraSecretManifest {
   entries: ExtraSecretManifestEntry[];
 }
 
+async function loadPluginsFromConfig(plan: SyncPlan): Promise<unknown[] | undefined> {
+  const opencodeItem = plan.items.find(
+    (item) => item.isConfigFile && item.localPath.includes('opencode.json')
+  );
+  if (!opencodeItem || !(await pathExists(opencodeItem.localPath))) {
+    return undefined;
+  }
+
+  const content = await fs.readFile(opencodeItem.localPath, 'utf8');
+  const parsed = parseJsonc<Record<string, unknown>>(content);
+  if (!hasOwn(parsed, 'plugin') || !Array.isArray(parsed.plugin)) {
+    return undefined;
+  }
+
+  return parsed.plugin;
+}
+
 export async function syncRepoToLocal(
   plan: SyncPlan,
   overrides: Record<string, unknown> | null,
   config: SyncConfig | null = null
 ): Promise<void> {
-  const pluginBaseDir = resolvePluginBaseDir(config, plan.homeDir, plan.platform);
+  const plugins = await loadPluginsFromConfig(plan);
+  const pluginBaseDir = resolvePluginBaseDir(config, plan.homeDir, plan.platform, plugins);
 
   for (const item of plan.items) {
     await copyItem(item.repoPath, item.localPath, item.type);
@@ -63,7 +81,8 @@ export async function syncLocalToRepo(
   options: { overridesPath?: string; allowMcpSecrets?: boolean; config?: SyncConfig | null } = {}
 ): Promise<void> {
   const config = options.config ?? null;
-  const pluginBaseDir = resolvePluginBaseDir(config, plan.homeDir, plan.platform);
+  const plugins = await loadPluginsFromConfig(plan);
+  const pluginBaseDir = resolvePluginBaseDir(config, plan.homeDir, plan.platform, plugins);
   const configItems = plan.items.filter((item) => item.isConfigFile);
   const sanitizedConfigs = new Map<string, Record<string, unknown>>();
   let secretOverrides: Record<string, unknown> = {};

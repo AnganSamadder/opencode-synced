@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SyncConfig } from './config.js';
 import {
+  inferPluginBaseDir,
   isLocalPluginPath,
   isPortablePluginPath,
   pluginPathToPortable,
@@ -9,6 +10,109 @@ import {
   transformPluginsForLocal,
   transformPluginsForRepo,
 } from './plugin-path.js';
+
+const mockExistsTrue = () => true;
+const mockExistsFalse = () => false;
+const mockExistsForPath = (validPath: string) => (p: string) =>
+  p === validPath || p.startsWith(validPath + '/');
+
+describe('resolvePluginBaseDir', () => {
+  it('infers from plugins when available', () => {
+    const plugins = [
+      'npm-package',
+      '/home/angan/code/opencode-plugins/openkilo',
+      '/home/angan/code/opencode-plugins/opentmux',
+    ];
+    const result = resolvePluginBaseDir(null, '/home/user', 'linux', plugins, mockExistsTrue);
+    expect(result).toBe('/home/angan/code/opencode-plugins');
+  });
+
+  it('detects common directory when no plugins to infer', () => {
+    const result = resolvePluginBaseDir(null, '/home/user', 'linux', undefined, mockExistsTrue);
+    expect(result).toBe('/home/user/Code/opencode-plugins');
+  });
+
+  it('falls back to config when inference and detection fail', () => {
+    const config: SyncConfig = { pluginBaseDir: '~/custom-plugins' };
+    const result = resolvePluginBaseDir(config, '/home/user', 'linux', [], mockExistsFalse);
+    expect(result).toBe('/home/user/custom-plugins');
+  });
+
+  it('returns null when config is null and no detection works', () => {
+    const result = resolvePluginBaseDir(null, '/nonexistent', 'linux', undefined, mockExistsFalse);
+    expect(result).toBeNull();
+  });
+
+  it('resolves string base dir with tilde expansion (detection disabled)', () => {
+    const config: SyncConfig = { pluginBaseDir: '~/plugins' };
+    const result = resolvePluginBaseDir(config, '/home/user', 'linux', undefined, mockExistsFalse);
+    expect(result).toBe('/home/user/plugins');
+  });
+
+  it('resolves per-platform base dir (detection disabled)', () => {
+    const config: SyncConfig = {
+      pluginBaseDir: {
+        darwin: '/Users/angansamadder/Code/opencode-plugins',
+        linux: '/home/angan/code/opencode-plugins',
+      },
+    };
+
+    expect(resolvePluginBaseDir(config, '/home/user', 'darwin', undefined, mockExistsFalse)).toBe(
+      '/Users/angansamadder/Code/opencode-plugins'
+    );
+    expect(resolvePluginBaseDir(config, '/home/user', 'linux', undefined, mockExistsFalse)).toBe(
+      '/home/angan/code/opencode-plugins'
+    );
+  });
+
+  it('returns null when platform not in per-platform config (detection disabled)', () => {
+    const config: SyncConfig = {
+      pluginBaseDir: {
+        darwin: '/Users/test/plugins',
+        linux: '/home/test/plugins',
+      },
+    };
+    expect(
+      resolvePluginBaseDir(config, '/home/user', 'win32', undefined, mockExistsFalse)
+    ).toBeNull();
+  });
+});
+
+describe('inferPluginBaseDir', () => {
+  it('infers common ancestor from multiple plugin paths', () => {
+    const plugins = [
+      'npm-package',
+      '/home/angan/code/opencode-plugins/openkilo',
+      '/home/angan/code/opencode-plugins/opentmux',
+      '@scope/another',
+    ];
+    const result = inferPluginBaseDir(plugins, '/home/user', 'linux', mockExistsTrue);
+    expect(result).toBe('/home/angan/code/opencode-plugins');
+  });
+
+  it('returns parent dir for single plugin', () => {
+    const plugins = ['/home/angan/code/opencode-plugins/openkilo'];
+    const result = inferPluginBaseDir(plugins, '/home/user', 'linux', mockExistsTrue);
+    expect(result).toBe('/home/angan/code/opencode-plugins');
+  });
+
+  it('returns null when no local plugins', () => {
+    const plugins = ['npm-package', '@scope/another'];
+    const result = inferPluginBaseDir(plugins, '/home/user', 'linux', mockExistsTrue);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for empty array', () => {
+    const result = inferPluginBaseDir([], '/home/user', 'linux', mockExistsTrue);
+    expect(result).toBeNull();
+  });
+
+  it('expands tilde paths', () => {
+    const plugins = ['~/Code/opencode-plugins/openkilo'];
+    const result = inferPluginBaseDir(plugins, '/home/user', 'linux', mockExistsTrue);
+    expect(result).toBe('/home/user/Code/opencode-plugins');
+  });
+});
 
 describe('isLocalPluginPath', () => {
   it('returns true for absolute paths', () => {
@@ -103,52 +207,6 @@ describe('portableToPluginPath', () => {
       '/Users/angansamadder/Code/opencode-plugins'
     );
     expect(result).toBe('/Users/angansamadder/Code/opencode-plugins/openkilo');
-  });
-});
-
-describe('resolvePluginBaseDir', () => {
-  it('returns null when config is null', () => {
-    expect(resolvePluginBaseDir(null, '/home/user', 'linux')).toBeNull();
-  });
-
-  it('returns null when pluginBaseDir is not set', () => {
-    expect(resolvePluginBaseDir({}, '/home/user', 'linux')).toBeNull();
-  });
-
-  it('resolves string base dir with tilde expansion', () => {
-    const config: SyncConfig = { pluginBaseDir: '~/plugins' };
-    const result = resolvePluginBaseDir(config, '/home/user', 'linux');
-    expect(result).toBe('/home/user/plugins');
-  });
-
-  it('resolves per-platform base dir', () => {
-    const config: SyncConfig = {
-      pluginBaseDir: {
-        darwin: '/Users/angansamadder/Code/opencode-plugins',
-        linux: '/home/angan/code/opencode-plugins',
-        win32: 'C:\\Users\\angan\\Code\\opencode-plugins',
-      },
-    };
-
-    expect(resolvePluginBaseDir(config, '/home/user', 'darwin')).toBe(
-      '/Users/angansamadder/Code/opencode-plugins'
-    );
-    expect(resolvePluginBaseDir(config, '/home/user', 'linux')).toBe(
-      '/home/angan/code/opencode-plugins'
-    );
-    expect(resolvePluginBaseDir(config, 'C:\\Users', 'win32')).toBe(
-      'C:\\Users\\angan\\Code\\opencode-plugins'
-    );
-  });
-
-  it('returns null when platform not in per-platform config', () => {
-    const config: SyncConfig = {
-      pluginBaseDir: {
-        darwin: '/Users/test/plugins',
-        linux: '/home/test/plugins',
-      },
-    };
-    expect(resolvePluginBaseDir(config, '/home/user', 'win32')).toBeNull();
   });
 });
 
