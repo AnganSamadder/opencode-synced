@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here by Release Please.
 
+## [0.9.0](https://github.com/AnganSamadder/opencode-synced/compare/v0.8.7...v0.9.0) (2026-02-17)
+
+
+### Features
+
+* add portable plugin paths for cross-machine sync ([794f66d](https://github.com/AnganSamadder/opencode-synced/commit/794f66d4c6470abb19b865b8291ae8680d4ce4ed))
+* auto-detect plugin base dir with fallback chain ([7290d26](https://github.com/AnganSamadder/opencode-synced/commit/7290d2649c6e980d8f454b65ddef847e62bddfa5))
+
 ## [0.7.1](https://github.com/iHildy/opencode-synced/compare/v0.7.0...v0.7.1) (2026-01-05)
 
 
